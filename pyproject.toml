@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyoti"
+version = "1.0"
+description = "Short description of my project"
+readme = "README.md"
+license = { text = "MIT" }
+
+# Keep core deps modest; pin with *upper bounds* to reduce breakage.
+dependencies = [
+
+  # Avoid putting CUDA / GPU-specific or solver-heavy packages here.
+]
+
+# Optional groups the user can opt into: pip install -e .[dev] or .[docs]
+[project.optional-dependencies]
+dev = [
+]
+docs = [
+]
+# Example: heavy ML stacks as extras so conda users can install via conda instead
+# and pip users can opt-in knowingly.
+ml = [
+  # Leave PyTorch out of core to avoid conflicts; let users pick CPU/GPU wheels
+  # "torch>=2.2"  # optional if you really want it here
+]
+
+# Console scripts (optional)
+[project.scripts]
+myproject-cli = "myproject.cli:main"
+
+# ---------------- Setuptools configuration ----------------
+[tool.setuptools]
+package-dir = { "" = "build" }
+
+[tool.setuptools.packages.find]
+where = ["build"]
+#include = ["myproject*"]
+#exclude = ["tests*"]
+
+# Choose ONE of the two versioning approaches below.
+# This project already uses a static `project.version` above, so no
+# `tool.setuptools.dynamic` entry is needed here.
+
+# Alternatively, use setuptools_scm with git tags:
+# (then: remove the [tool.setuptools.dynamic] section above, and add setuptools_scm)
+# [build-system]
+# requires = ["setuptools>=69", "setuptools_scm>=8", "wheel"]
+# build-backend = "setuptools.build_meta"
+# [tool.setuptools_scm]
+# version_scheme = "no-guess-dev"
+# local_scheme = "node-and-date"
