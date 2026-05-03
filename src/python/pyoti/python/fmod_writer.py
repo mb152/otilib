@@ -33,7 +33,7 @@ class writer:
   #---------------------------------------------------------------------------------------------------  
 
   #***************************************************************************************************
-  def __init__(self, nbases, order, language = 'fortran', tab = "  ", coeff_type = "REAL(DP)", 
+  def __init__(self, nbases, order, language = 'fortran', tab = "  ", coeff_type = "REAL(DP)", coeff_type = "REAL(SP)", 
     base_name = None, mdual = False, diagonal=False, order_bound=False, order_check = False ):
     """
     PORPUSE:  The purpose of this class is to create a Fortran Module that allows static dense
@@ -68,6 +68,7 @@ class writer:
 
     self.tab     = tab
     self.coeff_t = coeff_type
+    self.coeff_st = coeff_stype
     self.int32_t = 'INTEGER(4)'
     self.int64_t = 'INTEGER(8)'
     self.int_t = 'INTEGER'
@@ -110,8 +111,8 @@ class writer:
     
     else:
 
-      self.type_name = type_name
-      self.func_name = type_name
+      self.type_name = base_name
+      self.func_name = base_name
 
     # end if 
 
@@ -409,7 +410,10 @@ class writer:
     str_out += level + "INTEGER, PARAMETER :: num_im_dir = " + str(self.nimdir) + self.endl
     str_out += level + "INTEGER, PARAMETER :: torder     = " + str(self.order) + self.endl
     str_out += level + "INTEGER, PARAMETER :: n_imdir_order("+str(self.order+1)+") = [" 
-    
+    str_out += level + "INTEGER, PARAMETER :: oddp       = SELECTED_REAL_KIND(12)"
+    str_out += level + "INTEGER, PARAMETER :: odp        = SELECTED_REAL_KIND(6)"
+    str_out += level + "INTEGER, PARAMETER :: okint      = SELECTED_INT_KIND(8)"
+
     l=0
     
     for ordi in range(self.order+1):
@@ -464,6 +468,39 @@ class writer:
 
 
     str_out += level + "END TYPE "+self.type_name+self.endl
+
+    if sngl_type:
+      str_out += level + "TYPE s"+self.type_name+self.endl
+
+
+      # Write real part.
+      str_out += level + self.tab + self.comment + "Real" + self.endl
+      str_out += level + self.tab + self.coeff_t + " :: " + self.real_str + self.endl
+
+      for ordi in range(1,self.order+1):
+      
+        str_out += level + self.tab + self.comment + "Order " + str(ordi) + self.endl
+        dirs = self.name_imdir[ordi]
+
+        for j in range(len(dirs)):
+
+          str_out += level + self.tab + self.coeff_t + " :: " +dirs[j]+ self.endl
+
+        # end for 
+
+      # end for 
+
+      # Order check: May improve performance by only performing required operations.
+      # this new member of the Type (order) traces the order and only performs operations
+      # that are required by the  
+      if self.order_check:
+      
+        str_out += level + self.tab + "INTEGER :: ORDER" + self.endl
+
+      # end if 
+
+
+      str_out += level + "END TYPE s"+self.type_name+self.endl
 
     return str_out
 
@@ -3524,22 +3561,24 @@ class writer:
 
   #***************************************************************************************************
   def write_file(self, filename = None, tab = '  ', is_std_matmul=True, elemental_feval = True,
-    real_utils=True):
+    real_utils=True, single=False, module_name=None):
     """
     PORPUSE:  Write file of module containing OTI operations.
     """
     
     str_out = ""
 
-    if self.mdual:
-      module_name = "mdual"+str(self.nbases)
-    elif self.diagonal:
-      module_name = "diagotim"+str(self.nbases)+"n"+str(self.order)
-    else:
-      module_name = "otim"+str(self.nbases)+"n"+str(self.order)
-    # end if 
+    if module_name is None:
+      if self.mdual:
+        module_name = "mdual"+str(self.nbases)
+      elif self.diagonal:
+        module_name = "diagotim"+str(self.nbases)+"n"+str(self.order)
+      else:
+        module_name = "otim"+str(self.nbases)+"n"+str(self.order)
+      # end if 
+    # end if
 
-    fname = module_name.lower()+'.f90'    
+    fname = module_name.lower()+'.f90'
 
     if filename is not None:
       fname = filename
@@ -3556,7 +3595,7 @@ class writer:
     level   += 1
 
     str_out += level*tab + "USE master_parameters" + endl
-    str_out += level*tab + "USE real_utils" + endl + endl
+    if real_utils: str_out += level*tab + "USE real_utils" + endl + endl
 
     str_out += level*tab + "IMPLICIT NONE" + endl + endl
 
@@ -3592,10 +3631,11 @@ class writer:
     contents += endl
 
     shapes = [ ['S','S'],
-               ['V','S'],
-               ['M','S'],
-               ['S','V'],
-               ['S','M'] ] 
+               # ['V','S'],
+               # ['M','S'],
+               # ['S','V'],
+               # ['S','M'] 
+               ] 
     
     for shape in shapes:
 
@@ -3614,6 +3654,25 @@ class writer:
 
       contents += self.write_scalar_function(function_name = "ADD", is_elemental = True, level = level, 
         tab = tab, f_name = "", lhs_type= "O", rhs_type= self.real_str, separator = " + ", f_open = "", 
+        lhs_shape = shape[0], rhs_shape = shape[1], 
+        f_close = "", generator = self.addition_like_function_or, overload = "+" )
+      contents += endl
+
+      # single addition
+      contents += self.write_scalar_function(function_name = "ADD", is_elemental = True, level = level, 
+        tab = tab, f_name = "", lhs_type= "SO", rhs_type= "SO", separator = " + ", f_open = "", 
+        lhs_shape = shape[0], rhs_shape = shape[1], 
+        f_close = "", generator = self.addition_like_function_oo, overload = "+")
+      contents += endl 
+
+      contents += self.write_scalar_function(function_name = "ADD", is_elemental = True, level = level, 
+        tab = tab, f_name = "", lhs_type= self.sreal_str, rhs_type= "SO", separator = " + ", f_open = "", 
+        lhs_shape = shape[0], rhs_shape = shape[1], 
+        f_close = "", generator = self.addition_like_function_ro, overload = "+" )
+      contents += endl
+
+      contents += self.write_scalar_function(function_name = "ADD", is_elemental = True, level = level, 
+        tab = tab, f_name = "", lhs_type= "SO", rhs_type= self.sreal_str, separator = " + ", f_open = "", 
         lhs_shape = shape[0], rhs_shape = shape[1], 
         f_close = "", generator = self.addition_like_function_or, overload = "+" )
       contents += endl
